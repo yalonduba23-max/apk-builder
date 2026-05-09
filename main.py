@@ -15,6 +15,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
+from kivy.clock import Clock
 from threading import Thread
 
 
@@ -31,8 +32,11 @@ class BugHunterCore:
 
     def detect_portal(self, ip):
         try:
-            r = requests.get("http://clients3.google.com/generate_204",
-                           timeout=5, allow_redirects=True)
+            r = requests.get(
+                "http://clients3.google.com/generate_204",
+                timeout=5,
+                allow_redirects=True
+            )
             if r.status_code == 204:
                 return None
             return r.url
@@ -81,46 +85,66 @@ class HunterUI(BoxLayout):
         self.add_widget(self.scroll)
 
     def log(self, text):
+        # Safe UI update from any thread
+        Clock.schedule_once(lambda dt: self._append_log(text))
+
+    def _append_log(self, text):
         self.log_area.text += f"\n{text}"
+        # Auto scroll to bottom
+        self.scroll.scroll_y = 0
 
     def start_hunt(self, instance):
+        self.btn.disabled = True
         self.log_area.text = "[*] Starting..."
         Thread(target=self.run_logic, daemon=True).start()
 
     def run_logic(self):
-        ip = self.core.get_local_ip()
-        if not ip:
-            self.log("[!] No WiFi detected")
-            return
+        try:
+            ip = self.core.get_local_ip()
+            if not ip:
+                self.log("[!] No WiFi detected")
+                Clock.schedule_once(lambda dt: setattr(self.btn, 'disabled', False))
+                return
 
-        self.log(f"[*] Local IP: {ip}")
+            self.log(f"[*] Local IP: {ip}")
 
-        portal = self.core.detect_portal(ip)
-        if not portal:
-            self.log("[!] No captive portal detected")
-            return
-        self.log(f"[+] Portal: {portal}")
+            portal = self.core.detect_portal(ip)
+            if not portal:
+                self.log("[!] No captive portal detected")
+                Clock.schedule_once(lambda dt: setattr(self.btn, 'disabled', False))
+                return
 
-        domains = self.core.extract_domains(portal)
-        self.log(f"[*] Found {len(domains)} domains. Resolving...")
+            self.log(f"[+] Portal: {portal}")
 
-        ips = set()
-        for d in domains:
-            try:
-                ips.add(socket.gethostbyname(d))
-            except:
-                continue
+            domains = self.core.extract_domains(portal)
+            self.log(f"[*] Found {len(domains)} domains. Resolving...")
 
-        if not ips:
-            self.log("[!] No IPs resolved")
-            return
+            ips = set()
+            for d in domains:
+                try:
+                    ips.add(socket.gethostbyname(d))
+                except:
+                    continue
 
-        for target in ips:
-            self.log(f"[~] Testing {target}...")
-            if self.core.check_vless(target):
-                self.log(f"    [✔] WORKING: {target}")
-            else:
-                self.log(f"    [✗] No response: {target}")
+            if not ips:
+                self.log("[!] No IPs resolved")
+                Clock.schedule_once(lambda dt: setattr(self.btn, 'disabled', False))
+                return
+
+            for target in ips:
+                self.log(f"[~] Testing {target}...")
+                if self.core.check_vless(target):
+                    self.log(f"    [✔] WORKING: {target}")
+                else:
+                    self.log(f"    [✗] No response: {target}")
+
+            self.log("[*] Scan complete.")
+
+        except Exception as e:
+            self.log(f"[ERROR] {str(e)}")
+
+        finally:
+            Clock.schedule_once(lambda dt: setattr(self.btn, 'disabled', False))
 
 
 class BugHunterApp(App):
