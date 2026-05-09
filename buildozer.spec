@@ -25,6 +25,7 @@ android.accept_sdk_license = True
 
 # Force stable toolchain
 android.ndk = 25b
+android.ndk_path =
 android.build_tools = 34.0.0
 
 android.archs = armeabi-v7a, arm64-v8a
