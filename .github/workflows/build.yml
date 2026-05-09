@@ -1,14 +1,11 @@
 name: Build APK
-
 on:
   push:
     branches:
       - main
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -18,34 +15,39 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies (FIXED)
+      - name: Install system dependencies
         run: |
-          sudo apt update
-          sudo apt install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             git zip unzip openjdk-17-jdk \
-            python3-pip autoconf automake libtool-bin pkg-config \
+            python3-pip autoconf automake \
+            libtool libtool-bin pkg-config \
             m4 cmake build-essential gcc g++ \
             zlib1g-dev libffi-dev libssl-dev \
             autotools-dev
 
-      - name: Upgrade pip + install Buildozer
+      - name: Fix aclocal M4 macro path for p4a/libffi
+        run: |
+          # p4a runs autoreconf inside its bundled libffi source tree.
+          # It needs libtool's M4 macros visible. Symlink them explicitly.
+          LIBTOOL_M4_DIR=$(dirname $(find /usr/share/aclocal -name "libtool.m4" 2>/dev/null | head -1))
+          echo "Found libtool M4 at: $LIBTOOL_M4_DIR"
+          # Also copy into the system aclocal dir just in case
+          sudo cp /usr/share/aclocal/libtool.m4 /usr/share/aclocal/ 2>/dev/null || true
+          sudo cp /usr/share/aclocal/lt*.m4 /usr/share/aclocal/ 2>/dev/null || true
+          # Verify
+          ls /usr/share/aclocal/lt*.m4
+
+      - name: Install pip packages
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install cython buildozer
+          pip install cython==0.29.37 buildozer
 
       - name: Clean build cache
-        run: |
-          rm -rf ~/.buildozer
-
-      - name: Fix libtool macros
-        run: |
-          sudo apt install -y libtool-bin
-          aclocal --print-ac-dir
-          ls /usr/share/aclocal/
+        run: rm -rf ~/.buildozer
 
       - name: Build APK
-        run: |
-          buildozer -v android debug
+        run: buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
