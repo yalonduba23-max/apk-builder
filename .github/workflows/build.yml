@@ -37,6 +37,12 @@ jobs:
         run: |
           rm -rf ~/.buildozer
 
+      - name: Fix libtool macros
+        run: |
+          sudo apt install -y libtool-bin
+          aclocal --print-ac-dir
+          ls /usr/share/aclocal/
+
       - name: Build APK
         run: |
           buildozer -v android debug
