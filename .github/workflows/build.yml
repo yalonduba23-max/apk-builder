@@ -31,19 +31,13 @@ jobs:
 
       - name: Patch p4a libffi to skip autoreconf
         run: |
-          # Find p4a's libffi recipe and disable the autoreconf call
-          # p4a uses a pre-generated configure script - we just need to stop it re-running autoconf
           P4A_PATH=$(python -c "import pythonforandroid; import os; print(os.path.dirname(pythonforandroid.__file__))")
-          echo "p4a path: $P4A_PATH"
+          echo "p4a found at: $P4A_PATH"
           LIBFFI_RECIPE="$P4A_PATH/recipes/libffi/__init__.py"
-          echo "--- Original recipe ---"
           cat "$LIBFFI_RECIPE"
-          # Replace autoreconf call with a no-op by patching the recipe
           sed -i 's/autoreconf -vif/echo skipping autoreconf/g' "$LIBFFI_RECIPE"
-          # Also patch any shell scripts p4a calls
           find "$P4A_PATH/recipes/libffi/" -name "*.sh" -exec sed -i 's/autoreconf -vif/echo skipping autoreconf/g' {} \;
-          echo "--- Patched recipe ---"
-          cat "$LIBFFI_RECIPE"
+          echo "Patch applied."
 
       - name: Clean cache
         run: rm -rf ~/.buildozer
