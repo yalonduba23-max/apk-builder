@@ -15,35 +15,37 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             git zip unzip openjdk-17-jdk \
-            python3-pip autoconf automake \
-            libtool libtool-bin pkg-config \
-            m4 cmake build-essential gcc g++ \
-            zlib1g-dev libffi-dev libssl-dev \
-            autotools-dev
+            python3-pip autoconf automake libtool libtool-bin \
+            pkg-config m4 cmake build-essential \
+            zlib1g-dev libffi-dev libssl-dev
 
-      - name: Fix aclocal M4 macro path for p4a/libffi
-        run: |
-          # p4a runs autoreconf inside its bundled libffi source tree.
-          # It needs libtool's M4 macros visible. Symlink them explicitly.
-          LIBTOOL_M4_DIR=$(dirname $(find /usr/share/aclocal -name "libtool.m4" 2>/dev/null | head -1))
-          echo "Found libtool M4 at: $LIBTOOL_M4_DIR"
-          # Also copy into the system aclocal dir just in case
-          sudo cp /usr/share/aclocal/libtool.m4 /usr/share/aclocal/ 2>/dev/null || true
-          sudo cp /usr/share/aclocal/lt*.m4 /usr/share/aclocal/ 2>/dev/null || true
-          # Verify
-          ls /usr/share/aclocal/lt*.m4
-
-      - name: Install pip packages
+      - name: Install Python packages
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install cython==0.29.37 buildozer
 
-      - name: Clean build cache
+      - name: Patch p4a libffi to skip autoreconf
+        run: |
+          # Find p4a's libffi recipe and disable the autoreconf call
+          # p4a uses a pre-generated configure script - we just need to stop it re-running autoconf
+          P4A_PATH=$(python -c "import pythonforandroid; import os; print(os.path.dirname(pythonforandroid.__file__))")
+          echo "p4a path: $P4A_PATH"
+          LIBFFI_RECIPE="$P4A_PATH/recipes/libffi/__init__.py"
+          echo "--- Original recipe ---"
+          cat "$LIBFFI_RECIPE"
+          # Replace autoreconf call with a no-op by patching the recipe
+          sed -i 's/autoreconf -vif/echo skipping autoreconf/g' "$LIBFFI_RECIPE"
+          # Also patch any shell scripts p4a calls
+          find "$P4A_PATH/recipes/libffi/" -name "*.sh" -exec sed -i 's/autoreconf -vif/echo skipping autoreconf/g' {} \;
+          echo "--- Patched recipe ---"
+          cat "$LIBFFI_RECIPE"
+
+      - name: Clean cache
         run: rm -rf ~/.buildozer
 
       - name: Build APK
