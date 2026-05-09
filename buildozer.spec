@@ -37,7 +37,7 @@ version = 0.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,requests,certifi,openssl
+requirements = python3,kivy,requests
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -104,8 +104,6 @@ android.permissions = INTERNET, ACCESS_NETWORK_STATE, WRITE_EXTERNAL_STORAGE
 android.api = 34
 android.minapi = 28
 
-android.build_tools = 34.0.0
-android.ndk = 25b
 
 android.archs = armeabi-v7a, arm64-v8a
 
