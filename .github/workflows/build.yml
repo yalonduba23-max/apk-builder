@@ -18,28 +18,27 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install system dependencies (FIXED)
         run: |
           sudo apt update
           sudo apt install -y \
             git zip unzip openjdk-17-jdk \
-            python3-pip autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev \
-            cmake libffi-dev libssl-dev
+            python3-pip autoconf automake libtool pkg-config \
+            m4 cmake build-essential gcc g++ \
+            zlib1g-dev libffi-dev libssl-dev
 
-      - name: Install Buildozer
+      - name: Upgrade pip + install Buildozer
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install cython buildozer
 
-      - name: Clean Android SDK cache
+      - name: Clean build cache
         run: |
-          rm -rf ~/.buildozer/android/platform/android-sdk
           rm -rf ~/.buildozer
 
       - name: Build APK
         run: |
-          buildozer android debug
+          buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
