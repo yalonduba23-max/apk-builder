@@ -9,7 +9,7 @@ source.include_exts = py,png,jpg,kv,atlas
 
 version = 0.1
 
-requirements = python3,kivy,requests
+requirements = python3,kivy==2.3.0,requests
 
 orientation = portrait
 fullscreen = 0
@@ -24,7 +24,7 @@ android.minapi = 28
 android.accept_sdk_license = True
 
 # Force stable toolchain
-android.ndk = 25c
+android.ndk = 25b
 android.build_tools = 34.0.0
 
 android.archs = armeabi-v7a, arm64-v8a
