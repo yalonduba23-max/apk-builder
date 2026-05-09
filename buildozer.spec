@@ -103,9 +103,11 @@ android.permissions = INTERNET, ACCESS_NETWORK_STATE, WRITE_EXTERNAL_STORAGE
 # (int) Target Android API, should be as high as possible.
 android.api = 34
 android.minapi = 28
-android.sdk = 34
-android.ndk = 25b
+
 android.build_tools = 34.0.0
+android.ndk = 25b
+
+android.archs = armeabi-v7a, arm64-v8a
 
 # (int) Minimum API your APK / AAB will support.
 #android.minapi = 21
