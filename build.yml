@@ -3,28 +3,41 @@ on:
   push:
     branches:
       - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
     container:
       image: kivy/buildozer:latest
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Fix Permissions and Build
+      - name: Fix permissions
         run: |
-          # 1. Give root ownership to the home dir
-          chown -R root /github/home
-          
-          # 2. Bypass root warning
+          mkdir -p /github/home/.cache/pip
+          chown -R root /github/home/.cache
           sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
-          
-          # 3. CRITICAL: Wipe the old corrupted 3.14 cache
-          rm -rf .buildozer
-          
-          # 4. Run build with verbose logging
-          buildozer -v android debug
+
+      - name: Upgrade pip and dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel --break-system-packages
+
+      - name: Cache buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.buildozer
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+
+      - name: Cache buildozer local directory
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-${{ hashFiles('buildozer.spec') }}
+
+      - name: Build APK
+        run: buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
