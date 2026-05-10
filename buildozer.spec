@@ -9,12 +9,17 @@ source.include_exts = py,png,jpg,kv,atlas
 
 version = 0.1
 
-requirements = python3,kivy==2.3.0,requests,certifi,openssl,urllib3,idna,charset-normalizer,kivymd
+requirements = python3, kivy==2.3.0, requests, certifi, openssl, urllib3, idna, charset-normalizer, kivymd, aiohttp, multidict, yarl, attrs, async_timeout
 
 orientation = portrait
 fullscreen = 0
 
-android.permissions = INTERNET, ACCESS_NETWORK_STATE, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+android.permissions = INTERNET, ACCESS_NETWORK_STATE, BIND_VPN_SERVICE, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+
+# Java Service Setup
+android.add_src = src/org/test/bughunter/VpnEngine.java
+android.services = VpnEngine:org.test.bughunter.VpnEngine
+
 # Stable Android configuration
 android.api = 34
 android.minapi = 28
