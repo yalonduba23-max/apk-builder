@@ -3,26 +3,37 @@ on:
   push:
     branches:
       - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
     container:
       image: kivy/buildozer:latest
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Fix Permissions and Build
+      - name: Fix permissions
         run: |
-          # 1. Fix the pip cache permission error
           mkdir -p /github/home/.cache/pip
           chown -R root /github/home/.cache
-          
-          # 2. Force buildozer to NOT ask for root permission
           sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
-          
-          # 3. Run the build (using --v to see exactly where it stops if it fails)
-          buildozer android debug
+
+      - name: Cache buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.buildozer
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+
+      - name: Cache buildozer local directory
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-${{ hashFiles('buildozer.spec') }}
+
+      - name: Build APK
+        run: buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
