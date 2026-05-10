@@ -13,10 +13,11 @@ import socket
 import ssl
 import re
 import requests
+from urllib.parse import urljoin, urlparse
 
 class BugHunterApp(MDApp):
     def build(self):
-        self.scanning = False  # Track scan state
+        self.scanning = False 
         self.nav_layout = MDNavigationLayout()
         self.outer_sm = ScreenManager()
         self.main_screen_wrapper = Screen(name="main_wrapper")
@@ -48,15 +49,7 @@ class BugHunterApp(MDApp):
         self.vpn_screen = Screen(name="vpn")
         vpn_layout = MDBoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
         self.status_label = MDLabel(text="Status: Idle", halign="center", font_style="H6")
-        
-        # CHANGED: Use a central toggle function
-        self.scan_btn = MDRaisedButton(
-            text="START SCAN", 
-            pos_hint={"center_x": .5}, 
-            md_bg_color=(0, 0.5, 1, 1), # Initial Blue
-            on_release=self.toggle_scan
-        )
-        
+        self.scan_btn = MDRaisedButton(text="START SCAN", pos_hint={"center_x": .5}, md_bg_color=(0, 0.5, 1, 1), on_release=self.toggle_scan)
         vpn_layout.add_widget(self.status_label)
         vpn_layout.add_widget(self.scan_btn)
         self.vpn_screen.add_widget(vpn_layout)
@@ -64,7 +57,7 @@ class BugHunterApp(MDApp):
         # LOGS SCREEN
         self.logs_screen = Screen(name="logs")
         self.log_scroll = MDScrollView()
-        self.log_text = MDLabel(text="--- System Logs ---\n", size_hint_y=None, halign="left", theme_text_color="Secondary")
+        self.log_text = MDLabel(text="--- System Logs ---\n", size_hint_y=None, halign="left", theme_text_color="Secondary", padding=[dp(10), dp(10)])
         self.log_text.bind(texture_size=self.log_text.setter('size'))
         self.log_scroll.add_widget(self.log_text)
         self.logs_screen.add_widget(self.log_scroll)
@@ -95,91 +88,94 @@ class BugHunterApp(MDApp):
     def switch_screen(self, screen_name):
         self.sm.current = screen_name
 
-    # --- UPDATED TOGGLE LOGIC ---
     def toggle_scan(self, instance):
         if not self.scanning:
-            # START THE SCAN
             self.scanning = True
             self.scan_btn.text = "STOP SCAN"
-            self.scan_btn.md_bg_color = (1, 0, 0, 1) # Red for Stop
+            self.scan_btn.md_bg_color = (1, 0, 0, 1)
             self.status_label.text = "Status: Scanning..."
-            self.add_log("User initiated scan...")
+            self.add_log("Scan Started...")
             threading.Thread(target=self.run_scanner, daemon=True).start()
         else:
-            # STOP THE SCAN
             self.scanning = False
-            self.scan_btn.text = "START SCAN"
-            self.scan_btn.md_bg_color = (0, 0.5, 1, 1) # Blue for Start
-            self.status_label.text = "Status: Aborting..."
-            self.add_log("!!! STOP REQUESTED BY USER !!!")
+            self.add_log("Stopping scan...")
 
     def run_scanner(self):
+        # CONFIG FROM SUCCESSFUL HUNT.PY
+        BASH_REGEX = r'(?i)((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|me|be))'
+        EXCLUDE_FILTER = r'\.(jpg|jpeg|png|gif|ico|svg|css|js|mp4|woff|woff2|ttf)$'
+
         try:
             # Phase 1: Portal Detection
             if not self.scanning: return
             self.add_log("Detecting Captive Portal...")
-            target_url = "http://connectivitycheck.gstatic.com/generate_204"
-            try:
-                r = requests.get(target_url, timeout=5, allow_redirects=False)
-                if r.status_code in [301, 302, 307, 308]:
-                    portal_url = r.headers.get('Location')
-                    domain = re.search(r'https?://([^/]+)', portal_url).group(1)
-                    self.add_log(f"Found Portal: {domain}")
-                else:
-                    self.add_log("No redirect found. Testing gateway...")
-                    domain = "192.168.1.1" 
-            except Exception as e:
-                self.add_log(f"Portal detection failed: {e}")
-                Clock.schedule_once(lambda dt: self.finish_scan("Detection Failed"))
-                return
-
-            # Phase 2: Domain Extraction
-            if not self.scanning: return
-            self.add_log(f"Mirroring http://{domain}...")
-            page_content = requests.get(f"http://{domain}", timeout=5).text
+            r = requests.get("http://connectivitycheck.gstatic.com/generate_204", timeout=5, allow_redirects=False)
+            portal_url = r.headers.get('Location')
             
-            regex = r'(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+(com|net|org|io|me|be)'
-            extracted = set(re.findall(regex, page_content))
-            domains = ["".join(d) for d in extracted]
-            self.add_log(f"Extracted {len(domains)} potential domains.")
+            if not portal_url:
+                self.add_log("No Portal found. Check connection.")
+                Clock.schedule_once(lambda dt: self.finish_scan("No Portal Found"))
+                return
+            
+            domain = urlparse(portal_url).netloc
+            self.add_log(f"Portal: {domain}")
 
-            unique_ips = set()
-            for d in domains:
-                if not self.scanning: return # STOP CHECK
+            # Phase 2: Mirroring (HTML + JS)
+            if not self.scanning: return
+            self.add_log("Mirroring site (Downloading JS)...")
+            main_res = requests.get(portal_url, timeout=10)
+            combined_content = main_res.text
+            
+            # Find JS files
+            js_paths = re.findall(r'src=["\'](.*\.js.*?)["\']', main_res.text)
+            for path in js_paths:
+                if not self.scanning: return
+                js_url = urljoin(portal_url, path)
                 try:
-                    self.add_log(f"Resolving: {d}")
+                    self.add_log(f"Fetching JS: {path.split('/')[-1]}")
+                    combined_content += "\n" + requests.get(js_url, timeout=5).text
+                except: pass
+
+            # Extraction
+            if not self.scanning: return
+            raw_matches = re.findall(BASH_REGEX, combined_content)
+            
+            final_domains = set()
+            for m in raw_matches:
+                if not re.search(EXCLUDE_FILTER, m, re.IGNORECASE):
+                    final_domains.add(m.lower())
+            
+            self.add_log(f"Extracted {len(final_domains)} unique domains.")
+
+            # Phase 3: Handshake
+            unique_ips = set()
+            for d in final_domains:
+                if not self.scanning: return
+                try:
                     ip = socket.gethostbyname(d)
                     unique_ips.add(ip)
                 except: continue
 
-            # Phase 3: VLESS Handshake
-            self.add_log(f"Testing {len(unique_ips)} IPs...")
+            self.add_log(f"Testing {len(unique_ips)} unique IPs...")
             working_ips = []
-            
-            for ip in unique_ips:
-                if not self.scanning: break # STOP CHECK
+            for ip in sorted(unique_ips):
+                if not self.scanning: break
                 ok, msg = self.check_handshake(ip)
                 if ok:
-                    self.add_log(f"SUCCESS: {ip}")
+                    self.add_log(f"FOUND: {ip} (101 OK)")
                     working_ips.append(ip)
                 else:
-                    self.add_log(f"FAILED: {ip} ({msg[:15]})")
+                    self.add_log(f"FAIL: {ip} ({msg[:15]})")
 
-            # Finalize
-            if self.scanning:
-                msg = f"Completed. Found {len(working_ips)} bugs."
-            else:
-                msg = "Scan Aborted."
-                
-            self.add_log(msg)
-            Clock.schedule_once(lambda dt: self.finish_scan(msg))
+            result_msg = f"Done. Found {len(working_ips)} Bugs." if self.scanning else "Aborted."
+            self.add_log(result_msg)
+            Clock.schedule_once(lambda dt: self.finish_scan(result_msg))
 
         except Exception as e:
-            self.add_log(f"Fatal Error: {e}")
-            Clock.schedule_once(lambda dt: self.finish_scan("Error"))
+            self.add_log(f"Error: {e}")
+            Clock.schedule_once(lambda dt: self.finish_scan("Scan Error"))
 
     def check_handshake(self, ip):
-        # Same handshake logic as before...
         my_server = "web.chomba.tech"
         ws_path = "/vless"
         header = (
