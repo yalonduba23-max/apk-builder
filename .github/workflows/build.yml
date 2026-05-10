@@ -12,8 +12,17 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Build APK
-        run: yes | buildozer android debug 2>&1
+      - name: Fix Permissions and Build
+        run: |
+          # 1. Fix the pip cache permission error
+          mkdir -p /github/home/.cache/pip
+          chown -R root /github/home/.cache
+          
+          # 2. Force buildozer to NOT ask for root permission
+          sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
+          
+          # 3. Run the build (using --v to see exactly where it stops if it fails)
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
