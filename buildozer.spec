@@ -9,7 +9,10 @@ source.include_exts = py,png,jpg,kv,atlas
 
 version = 0.1
 
-requirements = python3==3.11, hostpython3==3.11, kivy==2.3.0, pyjnius, kivymd, aiohttp, requests, certifi, openssl, urllib3, idna, charset-normalizer, multidict, yarl, attrs, async_timeout
+requirements = python3, hostpython3, kivy==2.3.0, pyjnius, kivymd, aiohttp, requests, certifi, openssl, urllib3, idna, charset-normalizer, multidict, yarl, attrs, async_timeout
+
+# Important: Use the master branch for python-for-android to fix 404s
+p4a.branch = master
 
 orientation = portrait
 fullscreen = 0
