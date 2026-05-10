@@ -16,6 +16,7 @@ import requests
 
 class BugHunterApp(MDApp):
     def build(self):
+        self.scanning = False  # Track scan state
         self.nav_layout = MDNavigationLayout()
         self.outer_sm = ScreenManager()
         self.main_screen_wrapper = Screen(name="main_wrapper")
@@ -37,7 +38,7 @@ class BugHunterApp(MDApp):
 
         self.top_bar.add_widget(self.vpn_btn)
         self.top_bar.add_widget(self.logs_btn)
-        self.top_bar.add_widget(Widget()) # Spacer
+        self.top_bar.add_widget(Widget())
         self.top_bar.add_widget(self.gear_btn)
 
         # --- SCREENS ---
@@ -47,7 +48,15 @@ class BugHunterApp(MDApp):
         self.vpn_screen = Screen(name="vpn")
         vpn_layout = MDBoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
         self.status_label = MDLabel(text="Status: Idle", halign="center", font_style="H6")
-        self.scan_btn = MDRaisedButton(text="START SCAN", pos_hint={"center_x": .5}, on_release=self.start_scan_thread)
+        
+        # CHANGED: Use a central toggle function
+        self.scan_btn = MDRaisedButton(
+            text="START SCAN", 
+            pos_hint={"center_x": .5}, 
+            md_bg_color=(0, 0.5, 1, 1), # Initial Blue
+            on_release=self.toggle_scan
+        )
+        
         vpn_layout.add_widget(self.status_label)
         vpn_layout.add_widget(self.scan_btn)
         self.vpn_screen.add_widget(vpn_layout)
@@ -78,7 +87,6 @@ class BugHunterApp(MDApp):
 
         return self.nav_layout
 
-    # --- LOGGING ENGINE ---
     def add_log(self, message):
         def update_label(dt):
             self.log_text.text += f"[*] {message}\n"
@@ -87,16 +95,28 @@ class BugHunterApp(MDApp):
     def switch_screen(self, screen_name):
         self.sm.current = screen_name
 
-    # --- SCANNING LOGIC ---
-    def start_scan_thread(self, instance):
-        self.status_label.text = "Status: Scanning..."
-        self.scan_btn.disabled = True
-        self.add_log("Starting Bug Hunter Scan...")
-        threading.Thread(target=self.run_scanner, daemon=True).start()
+    # --- UPDATED TOGGLE LOGIC ---
+    def toggle_scan(self, instance):
+        if not self.scanning:
+            # START THE SCAN
+            self.scanning = True
+            self.scan_btn.text = "STOP SCAN"
+            self.scan_btn.md_bg_color = (1, 0, 0, 1) # Red for Stop
+            self.status_label.text = "Status: Scanning..."
+            self.add_log("User initiated scan...")
+            threading.Thread(target=self.run_scanner, daemon=True).start()
+        else:
+            # STOP THE SCAN
+            self.scanning = False
+            self.scan_btn.text = "START SCAN"
+            self.scan_btn.md_bg_color = (0, 0.5, 1, 1) # Blue for Start
+            self.status_label.text = "Status: Aborting..."
+            self.add_log("!!! STOP REQUESTED BY USER !!!")
 
     def run_scanner(self):
         try:
             # Phase 1: Portal Detection
+            if not self.scanning: return
             self.add_log("Detecting Captive Portal...")
             target_url = "http://connectivitycheck.gstatic.com/generate_204"
             try:
@@ -107,54 +127,59 @@ class BugHunterApp(MDApp):
                     self.add_log(f"Found Portal: {domain}")
                 else:
                     self.add_log("No redirect found. Testing gateway...")
-                    domain = "192.168.1.1" # Fallback
+                    domain = "192.168.1.1" 
             except Exception as e:
                 self.add_log(f"Portal detection failed: {e}")
+                Clock.schedule_once(lambda dt: self.finish_scan("Detection Failed"))
                 return
 
-            # Phase 2: Domain Extraction (In-Memory)
+            # Phase 2: Domain Extraction
+            if not self.scanning: return
             self.add_log(f"Mirroring http://{domain}...")
             page_content = requests.get(f"http://{domain}", timeout=5).text
             
-            # The EXACT regex from your script
             regex = r'(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+(com|net|org|io|me|be)'
             extracted = set(re.findall(regex, page_content))
-            
-            # Reconstruct domains from regex tuples
             domains = ["".join(d) for d in extracted]
             self.add_log(f"Extracted {len(domains)} potential domains.")
 
             unique_ips = set()
             for d in domains:
+                if not self.scanning: return # STOP CHECK
                 try:
                     self.add_log(f"Resolving: {d}")
                     ip = socket.gethostbyname(d)
                     unique_ips.add(ip)
-                except:
-                    continue
+                except: continue
 
             # Phase 3: VLESS Handshake
-            self.add_log(f"Testing {len(unique_ips)} IPs for VLESS handshake...")
+            self.add_log(f"Testing {len(unique_ips)} IPs...")
             working_ips = []
             
             for ip in unique_ips:
+                if not self.scanning: break # STOP CHECK
                 ok, msg = self.check_handshake(ip)
                 if ok:
-                    self.add_log(f"SUCCESS: {ip} (101 OK)")
+                    self.add_log(f"SUCCESS: {ip}")
                     working_ips.append(ip)
                 else:
-                    self.add_log(f"FAILED: {ip} ({msg[:20]})")
+                    self.add_log(f"FAILED: {ip} ({msg[:15]})")
 
-            # Finish
-            final_msg = f"Found {len(working_ips)} working hosts."
-            self.add_log(final_msg)
-            Clock.schedule_once(lambda dt: self.finish_scan(final_msg))
+            # Finalize
+            if self.scanning:
+                msg = f"Completed. Found {len(working_ips)} bugs."
+            else:
+                msg = "Scan Aborted."
+                
+            self.add_log(msg)
+            Clock.schedule_once(lambda dt: self.finish_scan(msg))
 
         except Exception as e:
             self.add_log(f"Fatal Error: {e}")
-            Clock.schedule_once(lambda dt: self.finish_scan("Error occurred"))
+            Clock.schedule_once(lambda dt: self.finish_scan("Error"))
 
     def check_handshake(self, ip):
+        # Same handshake logic as before...
         my_server = "web.chomba.tech"
         ws_path = "/vless"
         header = (
@@ -169,7 +194,6 @@ class BugHunterApp(MDApp):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(4)
             context = ssl.create_default_context()
-            # Disable cert verification for scanning if necessary, or use default
             ssock = context.wrap_socket(sock, server_hostname=my_server)
             ssock.connect((ip, 443))
             ssock.send(header.encode())
@@ -180,8 +204,10 @@ class BugHunterApp(MDApp):
             return (False, str(e))
 
     def finish_scan(self, msg):
+        self.scanning = False
         self.status_label.text = f"Status: {msg}"
-        self.scan_btn.disabled = False
+        self.scan_btn.text = "START SCAN"
+        self.scan_btn.md_bg_color = (0, 0.5, 1, 1)
 
 if __name__ == "__main__":
     BugHunterApp().run()
