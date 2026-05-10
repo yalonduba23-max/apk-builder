@@ -188,16 +188,27 @@ class BugHunterApp(MDApp):
         )
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(4)
-            context = ssl.create_default_context()
+            sock.settimeout(5) # Increased timeout slightly
+            
+            # --- THE FIX: Create an unverified context ---
+            context = ssl._create_unverified_context()
+            
             ssock = context.wrap_socket(sock, server_hostname=my_server)
             ssock.connect((ip, 443))
             ssock.send(header.encode())
+            
+            # Read response
             res = ssock.recv(1024).decode(errors='ignore')
             ssock.close()
+            
+            # If we see 101 Switching Protocols, the bug is working!
             return ("101" in res, res.splitlines()[0] if res else "No Response")
+            
+        except ssl.SSLError as e:
+            # If it's a Cert error, we still want to know if it's "alive"
+            return (False, f"SSL_ERR: {str(e)[:15]}")
         except Exception as e:
-            return (False, str(e))
+            return (False, str(e)[:15])
 
     def finish_scan(self, msg):
         self.scanning = False
