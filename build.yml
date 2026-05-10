@@ -14,21 +14,14 @@ jobs:
 
       - name: Fix Permissions and Build
         run: |
-          # 1. Fix Permissions
-          mkdir -p /github/home/.cache/pip
-          chown -R root /github/home/.cache
+          # Fix the home directory permission issue seen in your log
+          chown -R root /github/home
           
-          # 2. Force stable settings in spec
+          # Force settings
           sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
           
-          # 3. Clean any previous failed builds
-          buildozer android clean
+          # VERY IMPORTANT: Delete the old corrupted build data
+          rm -rf .buildozer
           
-          # 4. Run the build
-          buildozer android debug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: bin/*.apk
+          # Run the build with full logs so we can see the exact error if it fails
+          buildozer -v android debug
