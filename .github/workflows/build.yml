@@ -7,65 +7,66 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Use explicit version, not latest (more stable)
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install system dependencies
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
-            python3-pip autoconf libtool pkg-config \
+            git zip unzip \
+            openjdk-17-jdk \
+            python3-pip \
+            autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev \
-            libtinfo5 cmake libffi-dev libssl-dev \
-            build-essential ccache
+            cmake libffi-dev libssl-dev \
+            build-essential ccache \
+            libltdl-dev
 
-      - name: Install buildozer and dependencies
+      - name: Install buildozer
         run: |
-          pip install --upgrade pip
-          pip install buildozer cython virtualenv
+          pip3 install --upgrade pip
+          pip3 install buildozer
 
-      - name: Disable warn_on_root
+      - name: Patch warn_on_root
         run: sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
 
-      - name: Cache Android SDK/NDK and p4a build
+      - name: Set JAVA_HOME to Java 17
+        run: echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
+
+      - name: Cache ~/.buildozer (SDK, NDK, p4a)
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.buildozer
-            ~/.gradle
-          key: android-build-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            android-build-
+          path: ~/.buildozer
+          key: buildozer-home-${{ hashFiles('buildozer.spec') }}-v2
+          restore-keys: buildozer-home-
 
-      - name: Cache local .buildozer
+      - name: Cache .buildozer (local build artefacts)
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: local-buildozer-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            local-buildozer-
-
-      - name: Accept Android licenses
-        run: |
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-          yes | buildozer android update 2>/dev/null || true
+          key: buildozer-local-${{ hashFiles('buildozer.spec') }}-v2
+          restore-keys: buildozer-local-
 
       - name: Build APK
-        run: buildozer -v android debug
+        env:
+          # Force p4a to use Python 3.11 recipes by pointing at the correct tag
+          P4A_PYTHON_VERSION: "3.11.9"
+        run: buildozer -v android debug 2>&1 | tee build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: bughunter-debug-apk
+          name: bughunter-debug
           path: bin/*.apk
           if-no-files-found: error
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
