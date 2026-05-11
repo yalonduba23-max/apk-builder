@@ -17,7 +17,7 @@ fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE,BIND_VPN_SERVICE,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 
 android.add_src = src/org/test/bughunter/VpnEngine.java
-android.services = VpnEngine:org.test.bughunter.VpnEngine
+#android.services = VpnEngine:org.test.bughunter.VpnEngine
 
 android.api = 33
 android.minapi = 21
