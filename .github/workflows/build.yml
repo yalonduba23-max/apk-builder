@@ -30,6 +30,7 @@ jobs:
         run: |
           pip3 install --upgrade pip
           pip3 install buildozer
+          pip3 install cython
 
       - name: Patch warn_on_root
         run: sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
