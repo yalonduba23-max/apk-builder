@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="{{ args.package }}"
+    android:versionCode="{{ args.numeric_version }}"
+    android:versionName="{{ args.version }}">
+
+    <uses-sdk
+        android:minSdkVersion="{{ args.min_sdk_version }}"
+        android:targetSdkVersion="{{ args.android_api }}" />
+
+    {% for perm in args.permissions %}
+    {% if '.' in perm %}
+    <uses-permission android:name="{{ perm }}" />
+    {% else %}
+    <uses-permission android:name="android.permission.{{ perm }}" />
+    {% endif %}
+    {% endfor %}
+
+    <uses-feature android:name="android.software.vpn" android:required="false" />
+
+    <application
+        android:label="{{ args.title }}"
+        android:icon="@mipmap/icon"
+        android:allowBackup="true"
+        android:supportsRtl="true">
+
+        <activity
+            android:name="org.kivy.android.PythonActivity"
+            android:label="{{ args.title }}"
+            android:screenOrientation="{{ args.orientation }}"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name="org.test.bughunter.VpnEngine"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>
