@@ -9,7 +9,7 @@ version = 0.1
 # Fix: use 3.11.0 not 3.11 (GitHub tag is v3.11.0, not v3.11)
 requirements = python3==3.11.0,hostpython3==3.11.0,kivy==2.3.0,pyjnius==1.6.1,kivymd==1.2.0,aiohttp,requests,cython,certifi,openssl,urllib3,idna,charset-normalizer,multidict,async_timeout,attrs,yarl,six,filetype
 # Use master branch for latest bug fixes
-p4a.branch = master
+p4a.version = 2024.01.21
 
 orientation = portrait
 fullscreen = 0
