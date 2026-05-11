@@ -41,31 +41,45 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-home-${{ hashFiles('buildozer.spec') }}-v2
+          key: buildozer-home-${{ hashFiles('buildozer.spec') }}-v3
           restore-keys: buildozer-home-
 
       - name: Cache .buildozer (local build artefacts)
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: buildozer-local-${{ hashFiles('buildozer.spec') }}-v2
+          key: buildozer-local-${{ hashFiles('buildozer.spec') }}-v3
           restore-keys: buildozer-local-
 
       - name: Build APK
         env:
-          # Force p4a to use Python 3.11 recipes by pointing at the correct tag
           P4A_PYTHON_VERSION: "3.11.9"
-        run: buildozer -v android debug 2>&1 | tee build.log
+        run: |
+          buildozer -v android debug 2>&1 | tee build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "Build exit code: $BUILD_EXIT"
+          exit $BUILD_EXIT
+
+      - name: Find APK
+        if: success()
+        run: |
+          echo "=== Searching for APK ==="
+          find . -name "*.apk" 2>/dev/null
+          echo "=== bin/ contents ==="
+          ls -la bin/ 2>/dev/null || echo "bin/ does not exist"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: bughunter-debug
-          path: bin/*.apk
-          if-no-files-found: error
+          path: |
+            bin/*.apk
+            **/*.apk
+          if-no-files-found: warn
 
-      - name: Upload build log on failure
-        if: failure()
+      - name: Upload build log (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
