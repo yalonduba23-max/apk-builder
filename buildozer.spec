@@ -11,6 +11,9 @@ requirements = python3==3.11.0,hostpython3==3.11.0,kivy==2.3.0,pyjnius==1.6.1,ki
 # Use master branch for latest bug fixes
 p4a.version = 2024.01.21
 
+# Disable problematic modules not needed on Android
+android.modules = grp,spwd
+
 orientation = portrait
 fullscreen = 0
 
