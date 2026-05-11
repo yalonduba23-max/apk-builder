@@ -6,9 +6,6 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
 
-# No python3/hostpython3 version pin — p4a.branch = develop manages this internally
-# pyjnius not listed — sdl2 bootstrap adds it automatically
-# cython not listed — p4a pins its own version
 requirements = python3,hostpython3,kivy==2.3.0,kivymd==1.2.0,aiohttp,requests,certifi,openssl,urllib3,idna,charset-normalizer,multidict,yarl,six
 
 p4a.branch = develop
