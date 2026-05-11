@@ -1,4 +1,5 @@
 name: Build APK
+
 on:
   push:
     branches:
@@ -6,37 +7,65 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: kivy/buildozer:latest
+    runs-on: ubuntu-22.04  # Use explicit version, not latest (more stable)
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Fix permissions
-        run: |
-          mkdir -p /github/home/.cache/pip
-          chown -R root /github/home/.cache
-          sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Cache buildozer global directory
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            python3-pip autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libtinfo5 cmake libffi-dev libssl-dev \
+            build-essential ccache
+
+      - name: Install buildozer and dependencies
+        run: |
+          pip install --upgrade pip
+          pip install buildozer cython virtualenv
+
+      - name: Disable warn_on_root
+        run: sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
+
+      - name: Cache Android SDK/NDK and p4a build
         uses: actions/cache@v4
         with:
-          path: /github/home/.buildozer
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+          path: |
+            ~/.buildozer
+            ~/.gradle
+          key: android-build-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            android-build-
 
-      - name: Cache buildozer local directory
+      - name: Cache local .buildozer
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: buildozer-local-${{ hashFiles('buildozer.spec') }}
+          key: local-buildozer-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            local-buildozer-
+
+      - name: Accept Android licenses
+        run: |
+          mkdir -p ~/.android
+          touch ~/.android/repositories.cfg
+          yes | buildozer android update 2>/dev/null || true
 
       - name: Build APK
-        run: buildozer android debug
+        run: buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: apk
+          name: bughunter-debug-apk
           path: bin/*.apk
+          if-no-files-found: error
