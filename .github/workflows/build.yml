@@ -8,76 +8,51 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    # This container has Python 3.11, NDK r25b, SDK, Cython all pre-installed
+    # and locked — it cannot pull Python 3.14
+    container:
+      image: kivy/buildozer:latest
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Fix permissions and root warning
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
-            git zip unzip \
-            openjdk-17-jdk \
-            python3-pip \
-            autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev \
-            cmake libffi-dev libssl-dev \
-            build-essential ccache \
-            libltdl-dev
+          sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
+          # Ensure home dirs exist with correct ownership
+          mkdir -p /root/.buildozer /root/.gradle
+          mkdir -p /github/home/.buildozer /github/home/.gradle
+          chown -R root:root /github/home 2>/dev/null || true
 
-      - name: Install buildozer
-        run: |
-          pip3 install --upgrade pip
-          pip3 install buildozer
-          pip3 install cython
-
-      - name: Patch warn_on_root
-        run: sed -i 's/warn_on_root = 1/warn_on_root = 0/' buildozer.spec
-
-      - name: Set JAVA_HOME to Java 17
-        run: echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64" >> $GITHUB_ENV
-
-      - name: Cache ~/.buildozer (SDK, NDK, p4a)
+      - name: Cache buildozer downloads
         uses: actions/cache@v4
         with:
-          path: ~/.buildozer
-          key: buildozer-home-${{ hashFiles('buildozer.spec') }}-v3
-          restore-keys: buildozer-home-
+          path: /root/.buildozer
+          key: kivy-buildozer-${{ hashFiles('buildozer.spec') }}-v1
+          restore-keys: kivy-buildozer-
 
-      - name: Cache .buildozer (local build artefacts)
+      - name: Cache local build artefacts
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: buildozer-local-${{ hashFiles('buildozer.spec') }}-v3
-          restore-keys: buildozer-local-
+          key: kivy-local-${{ hashFiles('buildozer.spec') }}-v1
+          restore-keys: kivy-local-
 
       - name: Build APK
-        env:
-          P4A_PYTHON_VERSION: "3.11.9"
         run: |
           buildozer -v android debug 2>&1 | tee build.log
           BUILD_EXIT=${PIPESTATUS[0]}
           echo "Build exit code: $BUILD_EXIT"
           exit $BUILD_EXIT
 
-      - name: Find APK
-        if: success()
-        run: |
-          echo "=== Searching for APK ==="
-          find . -name "*.apk" 2>/dev/null
-          echo "=== bin/ contents ==="
-          ls -la bin/ 2>/dev/null || echo "bin/ does not exist"
-
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: bughunter-debug
-          path: |
-            bin/*.apk
-            **/*.apk
-          if-no-files-found: warn
+          path: bin/*.apk
+          if-no-files-found: error
 
       - name: Upload build log (always)
         if: always()
